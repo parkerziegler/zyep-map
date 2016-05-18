@@ -1,0 +1,294 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="description" content="Map of Zuni Youth Enrichment Project Activities">
+<meta name="keywords" content="public health, pubelo, Zuni">
+<meta name="author" content="Joseph Holler">
+<title>Zuni Youth Enrichment Project</title>
+
+<!-- CSS style sheets and Javascript libraries for Leaflet, Leaflet Label, Mapbox, and Mapbox Maki plugin -->
+<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.css" />
+<link rel="stylesheet" href="stylesheets/leafletlabel.css" />
+<script src="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.js"></script>
+<script src="javascripts/leaflet.js"></script>
+<script src="javascripts/leafletmakimarkers.js"></script>
+
+<!-- custom CSS style for my map -->
+<style>
+body { padding: 0; margin: 0;}
+html, body, #map { height: 100%;}
+.legend {
+	padding: 6px 8px;
+    font: 12px Arial, Helvetica, sans-serif;
+    background: white;
+    background: rgba(255,255,255,0.6);
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    border-radius: 5px;
+	text-align: left;
+	line-height: 18px;
+	color: #777;
+}
+.legend i {
+	width: 18px;
+	height: 18px;
+	float: left;
+	margin-right: 8px;
+	opacity: 0.7;
+}
+.legend .point {
+  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  margin-left: 4px;
+  margin-right: 12px;
+  border: 1px solid;
+  border-color: #fff;
+  opacity: 0.8;
+}
+.legend .line {
+  height: 4px;
+  margin-top: 7px;
+  margin-bottom: 7px;
+  border-radius: 2px;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- the map DIV object -->
+<div id="map" style="width: 100%; height: 100%; border: 2px solid;"></div>
+
+<!-- these scripts contain the geoJson vector data --> 
+<script src="javascripts/distance_markers.js"></script>
+<script src="javascripts/landmarks.js"></script>
+<script src="javascripts/playgrounds.js"></script>
+<script src="javascripts/trails.js"></script>
+<script src="javascripts/blackrock.js"></script>
+
+<script>
+/* function to recenter the map on Zuni using an HTML link with id Zunilink */
+window.onload = function(){
+    document.getElementById("Zunilink").onclick = function(){
+        if(map.setView([35.0695, -108.8484], 13)){
+            return false;
+    }}};
+
+/* variables for each vector layer */
+var distance_markersL, landmarksL, playgroundsL, trailsL, bike_pathL, underlineL;
+
+/* functions to highlight and remove highlighting of Json features*/
+function highlight(obj) {obj.target.setStyle({fillColor: '#000000', fillOpacity: 0.8, color: '#000000', opacity: 0.8});}
+function lowlightDistanceMarkers(obj) {distance_markersL.resetStyle(obj.target);}
+function lowlightLandmarks(obj) {landmarksL.resetStyle(obj.target);}
+function lowlightPlaygrounds(obj) {playgroundsL.resetStyle(obj.target);}
+function lowlightTrails(obj) {trailsL.resetStyle(obj.target);}
+function lowlightBikepath(obj) {bike_pathL.resetStyle(obj.target);}
+
+/* bind label for json distance markers on hover*/
+function onDistanceMarkers(feature, layer) {
+    if (feature.properties){
+		layer.bindLabel(String(feature.properties.miles) + ' mi');
+		layer.on({
+			mouseover: highlight,
+    		mouseout: lowlightDistanceMarkers
+		});
+	}
+}
+/* bind label for json landmarks on hover*/
+function onLandmarks(feature, layer) {
+    if (feature.properties && feature.properties.Name && feature.properties.Type && feature.properties.Number){
+		layer.bindLabel(feature.properties.Name);
+		layer.on({
+			mouseover: highlight,
+    		mouseout: lowlightLandmarks
+		});
+	}
+}
+
+/* bind label for json playgrounds on hover */
+function onPlaygrounds(feature, layer){
+    if (feature.properties && feature.properties.Name && feature.properties.Number){
+        layer.bindLabel(feature.properties.Name);
+        layer.on({
+            mouseover: highlight,
+            mouseout: lowlightPlaygrounds
+        });
+    }
+}
+
+/*popup and bind label for json trails on hover */
+function onTrails(feature, layer) {
+    if (feature.properties){
+        layer.bindPopup('<b>' + feature.properties.Name + '</b>' + ' – ' + feature.properties.TotalLeng + ' mi' + '<br>' + 'Trailhead: ' + feature.properties.Trailhead + '<br>' + 'Difficulty: ' + feature.properties.Terrain);
+		layer.bindLabel(feature.properties.Name);
+        layer.on({
+				mouseover: highlight,
+                mouseout: lowlightTrails
+			});
+    }
+}
+
+/* bind label for json bikepaths on hover */
+function onBikepath(feature, layer){
+    if (feature.properties){
+        layer.bindLabel(feature.properties.Name);
+        layer.on({
+            mouseover: highlight,
+            mouseout: lowlightBikepath
+        });
+    }
+} 
+
+/*convert distance markers to color hex*/
+function milesToColor(ty){
+    switch(ty){
+        case 1: return "#478B8A";
+        case 2: return "#9AD8D6"
+    }}
+
+/* here we'll need to figure out how to make icons based on landmark type*/
+ function landmarksToMarker(ty){
+    switch(ty){
+        case 1: return communityMarker;
+        case 2: return schoolMarker;
+        case 3: return gardenMarker;
+        case 4: return hospitalMarker;
+        case 5: return parkMarker
+    }}
+    
+/*create base layers*/
+var USGS = L.tileLayer.wms("http://basemap.nationalmap.gov/arcgis/services/USGSTopo/MapServer/WMSServer", {
+            layers: 0
+        });
+		
+var USGS_on = 1;
+var Trails_on = 1;
+var mapboxSatellite = L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoicHppZWdsZXIiLCJhIjoiY2ltMHo3OGRxMDh0MXR5a3JrdHNqaGQ0bSJ9.KAFBMeyysBLz4Ty-ltXVQQ', {
+			maxZoom: 18,
+			attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ' +
+				'<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+				'Imagery © <a href="http://mapbox.com">Mapbox</a>',
+			id: 'mapbox.streets-satellite'
+		});
+    
+/*create feature layers*/
+var distance_markersL = L.geoJson(distance_markers, 
+		{pointToLayer: function (feature, latlng) {return L.circleMarker(latlng, dmStyle);},
+		onEachFeature: onDistanceMarkers,
+		style: function(feature){ return {fillColor: milesToColor(feature.properties.Number)};}});
+var landmarksL = L.geoJson(landmarks,
+        {pointToLayer: function(feature, latlng){return L.marker(latlng, {icon: landmarksToMarker(feature.properties.Number)});},
+        onEachFeature: onLandmarks,
+        style: lmStyle});
+var playgroundsL = L.geoJson(playgrounds, 
+		{pointToLayer: function (feature, latlng) {return L.marker(latlng, {icon: pgMarker});},
+         onEachFeature: onPlaygrounds,
+         style: pgStyle});
+var trailsL = L.geoJson(trails,
+        {style: function (feature) {return {color: feature.properties.Color, weight: 5, opacity: 1, dashArray: '10, 10'};},
+         onEachFeature: onTrails});
+var bike_pathL = L.geoJson(blackrockBP,
+        {style: bikepathStyle,
+         onEachFeature: onBikepath});
+var underlineL = L.geoJson(trails,
+        {style: underlineStyle});
+
+/*create baseMaps and overlays objects*/
+/*array of tiles for the layers control*/
+var baseMaps = {"Satellite": mapboxSatellite, "Topo": USGS};
+
+/*array of vector layers for the layers control */
+var overlays = {"Trails": trailsL, "Distance Markers": distance_markersL, "Landmarks": landmarksL, "Playgrounds": playgroundsL, "Bike Path": bike_pathL};
+
+/*array of all map layers in their drawing order, back to front */
+var mapLayers = [USGS, underlineL, trailsL, bike_pathL, distance_markersL, landmarksL, playgroundsL];
+
+/*create the map!*/
+var map = L.map('map', {center: [35.0695, -108.8484], zoom: 13, layers: mapLayers});
+/*add layer controls & scale control to map*/
+L.control.layers(baseMaps, overlays).addTo(map);
+L.control.scale({metric: false, position: 'bottomright'}).addTo(map);
+
+/*array of legend items*/
+var legItems = ['<i class="point" style="background:' + milesToColor(1) + '"></i> Trailhead<br>' + '<i class="point" style="background:' + milesToColor(2) + '"></i> Half Mile Marker<br>', '<i class="line" style="background:' + bikepathStyle.color + '"></i> Bike Path'];
+/*array indicating which legend items are on or off */
+var legIndex = [1, 1];
+
+/*create the legend*/
+var legend = L.control({position: 'bottomleft'});
+legend.onAdd = function (map) {
+    this._div = L.DomUtil.create('div', 'legend');
+	this.update();
+	return this._div;
+};
+
+/*function to update the legend when related layers are added or removed from the map*/
+legend.update = function(){
+	this._div.innerHTML = '';
+	for( i = 0; i < 2; i++){
+		if(legIndex[i]){this._div.innerHTML += legItems[i] ;}
+	}
+};
+legend.addTo(map);
+
+/* Listen for layers being added to map & so you can update legend and trails background 
+for reference, these are the mapLayers: 
+0 USGS, 1 underlineL, 2 trailsL, 3 bike_pathL, 4 distance_markersL, 5 landmarksL, 6 playgroundsL */
+map.on('overlayadd', function(e){
+	switch (e.name){
+		case 'Distance Markers': legIndex[0] = 1; break;
+        case 'Bike Path': legIndex[1] = 1; break;
+		case 'Trails':  Trails_on = 1;
+            if (USGS_on){
+		  /*add IF statement here to check if USGS is also on; if so, draw underlineL layer with the following statement */	
+		  map.addLayer(underlineL)};
+		break;
+	}
+	for( i = 2; i < 7; i++){
+     mapLayers[i].bringToFront();
+	 }
+	legend.update();
+	});
+map.on('overlayremove', function(e){
+	switch (e.name){
+		case 'Distance Markers': legIndex[0] = 0; break;
+        case 'Bike Path': legIndex[1] = 0; break;
+		case 'Trails': map.removeLayer(underlineL); Trails_on = 0;  break;
+	}
+	legend.update();
+	});
+
+map.on('baselayerchange', function(e){
+    if(USGS_on){
+    map.removeLayer(underlineL);
+    }
+    else if (Trails_on){
+    map.addLayer(underlineL);
+    for( i = 2; i < 7; i++){
+     mapLayers[i].bringToFront();
+     }
+    }
+     /* switch USGS_on */
+    USGS_on = 1 - USGS_on;
+});
+
+</script>
+
+<!-- additional content below the map -->
+<p align="center"><small>Re-center the  map back to <a id="Zunilink" href="">Zuni, NM</a></small></p>
+<p>In the future, keep an eye on the <a href="http://www.dot.ri.gov/community/bikeri/" target="_blank">RI DOT</a> for the re-opening of the <a href="http://www.dot.ri.gov/community/bikeri/washingtonbridge.php" target="_blank">Washington Bridge</a> across the Seekonk River at India Point, and extensions of the Trestle Trail in Coventry.</p>
+<p align = "center">Back to <a href="explore.html">Exploration</a></p>
+
+  <!-- end #mainContent --></div>
+  
+  <div align="center">
+  email joseph at josephholler.com</td>
+      </div>
+
+
+</body>
+</html>
